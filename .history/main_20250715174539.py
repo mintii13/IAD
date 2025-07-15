@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 DMIAD (Dual Memory Image Anomaly Detection) - Main Entry Point
 """
