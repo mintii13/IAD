@@ -2,7 +2,6 @@ import subprocess
 import sys
 import os
 from datetime import datetime
-timestamp = datetime.now().strftime("%d%m%Y_%H%M")
 
 # Configuration for MPDD DMIAD
 config = {
@@ -22,7 +21,7 @@ config = {
     'imagesize': 288,     # From your script
     'use_spatial_memory': True,
     'fusion_method': 'add',
-    'output_dir': f'./results/mpdd_results_{timestamp}'
+    'output_dir': './mpdd_results'
 }
 
 def run_dmiad_mpdd(mode='train', selected_classes=None):

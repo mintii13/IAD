@@ -25,8 +25,8 @@ class TemporalMemoryModule(nn.Module):
         # Memory bank C: [mem_size, channels]
         # self.register_buffer('memory', torch.randn(mem_dim, fea_dim))
         self.memory = nn.Parameter(torch.randn(mem_dim, fea_dim))
-        nn.init.normal_(self.memory, mean=0, std=0.1)
-        self.memory.data = F.normalize(self.memory.data, dim=1) 
+        nn.init.normal_(self.memory, mean=0, std=0.1)  # ✅ THÊM
+self.memory.data = F.normalize(self.memory.data, dim=1)  # ✅ THÊ
         # self.memory = F.normalize(self.memory, dim=1)
         
         # Shared MLP cho temporal processing

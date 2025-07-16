@@ -26,7 +26,7 @@ class SpatialMemoryModule(nn.Module):
         # Memory bank H: [mem_size, H, W] - giữ nguyên spatial structure
         # self.register_buffer('memory', torch.randn(mem_dim, height, width))
         self.memory = nn.Parameter(torch.randn(mem_dim, height, width))
-        nn.init.normal_(self.memory, mean=0, std=0.1) 
+        nn.init.normal_(self.memory, mean=0, std=0.1)  # ✅ THÊM
         self.memory.data = F.normalize(self.memory.data.view(mem_dim, -1), dim=1).view(mem_dim, height, width) 
         # self.memory = F.normalize(self.memory.view(mem_dim, -1), dim=1).view(mem_dim, height, width)
         
