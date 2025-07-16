@@ -10,14 +10,14 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from tqdm import tqdm
-
+from utils.visualization import save_image_comparison 
 from datasets.mvtec import get_dataloaders, DatasetSplit
 from models.dmiad import build_dmiad_model
 from models.losses.combined_loss import CombinedLoss
 from utils.metrics import compute_metrics
 from utils.checkpoint import save_checkpoint, load_checkpoint
 from utils.logger import get_logger
-from utils.visualization import save_image_comparison  
+from utils.visualization import save_visualization
 
 
 class Trainer:
@@ -265,39 +265,6 @@ class Trainer:
         if epoch % self.config.SAVE_FREQ == 0:
             save_checkpoint(checkpoint, os.path.join(self.exp_dir, f'checkpoint_epoch_{epoch}.pth'))
     
-    def _save_visualizations(self, epoch):
-        """Save training visualizations"""
-        try:
-            # Get a sample batch for visualization
-            self.model.eval()
-            with torch.no_grad():
-                for batch in self.dataloaders['test']:
-                    images = batch['image'].to(self.device)
-                    masks = batch['mask'].to(self.device)
-                    
-                    # Forward pass
-                    outputs = self.model(images)
-                    reconstructed = outputs['reconstructed']
-                    
-                    # Compute anomaly scores
-                    anomaly_scores = self.model.compute_anomaly_score(images, reconstructed)
-                    
-                    # Save visualization for first image in batch
-                    vis_dir = os.path.join(self.exp_dir, 'visualizations')
-                    os.makedirs(vis_dir, exist_ok=True)
-                    
-                    save_path = os.path.join(vis_dir, f'epoch_{epoch}_sample.png')
-                    save_image_comparison(
-                        images[0], reconstructed[0], anomaly_scores['pixel_scores'][0],
-                        save_path, masks[0], title=f'Epoch {epoch}'
-                    )
-                    break  
-            
-            self.model.train()
-            
-        except Exception as e:
-            self.logger.warning(f"Failed to save visualizations: {e}")
-    
     def train(self):
         """Main training loop"""
         self.logger.info("Starting training...")
@@ -330,6 +297,14 @@ class Trainer:
         
         self.logger.info("Training completed!")
         self.writer.close()
+    
+    def _save_visualizations(self, epoch):
+        """Save training visualizations"""
+        # TODO: Implement visualization saving
+        # - Sample reconstructions
+        # - Attention maps
+        # - Memory patterns
+        pass
 
 
 def train_model(config, device, exp_dir):

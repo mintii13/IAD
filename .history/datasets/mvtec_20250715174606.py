@@ -37,10 +37,8 @@ class IADDataset(Dataset):
         self.split = split
         self.dataset_name = config.DATASET.NAME
         self.root_path = config.DATASET.ROOT
-        self.setting = config.DATASET.SETTING  # 'single' or 'multi' - MOVED UP!
-        
-        # Now we can safely call _get_class_names()
         self.class_names = self._get_class_names()
+        self.setting = config.DATASET.SETTING  # 'single' or 'multi'
         
         # Image preprocessing
         if transform is None:

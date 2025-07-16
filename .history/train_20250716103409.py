@@ -17,7 +17,7 @@ from models.losses.combined_loss import CombinedLoss
 from utils.metrics import compute_metrics
 from utils.checkpoint import save_checkpoint, load_checkpoint
 from utils.logger import get_logger
-from utils.visualization import save_image_comparison  
+from utils.visualization import save_image_comparison  # Fixed import
 
 
 class Trainer:

@@ -6,7 +6,7 @@ Tích hợp backbone, dual memory modules, và decoder
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.backbone.wide_resnet import build_wideresnet_backbone
+from models.backbone.wider_resnet import build_wideresnet_backbone
 from models.memory.temporal_memory import build_temporal_memory
 from models.memory.spatial_memory import build_spatial_memory
 
@@ -107,9 +107,10 @@ class DMIAD(nn.Module):
         self.config = config
         self.model_name = config.MODEL.NAME
         
-        # Memory configuration
+        # Memory configuration - SIMPLIFIED
         self.use_spatial_memory = config.MODEL.MEMORY.USE_SPATIAL
         self.fusion_method = config.MODEL.MEMORY.FUSION_METHOD
+        self.feature_dim = config.MODEL.MEMORY.FEATURE_DIM
         
         # === 1. Backbone Network ===
         self.backbone = build_wideresnet_backbone(
@@ -117,76 +118,13 @@ class DMIAD(nn.Module):
             pretrained_path=getattr(config.MODEL, 'PRETRAINED_PATH', None)
         )
         
-        # === 2. Auto-detect feature dimensions from backbone ===
-        self._detect_backbone_dims(config)
-        
-        # === 3. Feature Projection Layers ===
-        self.conv_proj = nn.Conv2d(self.backbone_feature_dim, self.feature_dim, kernel_size=1, bias=False)
+        # === 2. Feature Projection Layers ===
+        self.conv_proj = nn.Conv2d(4096, self.feature_dim, kernel_size=1, bias=False)
         self.conv_s4 = nn.Conv2d(256, 256, kernel_size=1, bias=False)
         self.conv_s2 = nn.Conv2d(128, 128, kernel_size=1, bias=False)
         
-        # === 4. Dual Memory Modules ===
-        self._build_memory_modules(config)
-        
-        # === 5. Memory Fusion Module ===
-        if self.use_spatial_memory:
-            self.fusion = FusionModule(self.feature_dim, self.fusion_method)
-        
-        # === 6. Attention Modules ===
-        self.attn_s8 = ChannelAttention(self.feature_dim)
-        self.attn_s4 = ChannelAttention(256)
-        self.attn_s2 = ChannelAttention(128)
-        
-        # === 7. Decoder Network ===
-        self.up_s8_to_s4 = ConvTransposeBnRelu(self.feature_dim, 256, kernel_size=2, stride=2)
-        self.up_s4_to_s2 = ConvTransposeBnRelu(256, 128, kernel_size=2, stride=2)
-        self.up_s2_to_s1 = ConvTransposeBnRelu(128, 64, kernel_size=2, stride=2)
-        
-        # === 8. Final Output Layer ===
-        self.final_layer = nn.Sequential(
-            ConvBnRelu(64, 32, kernel_size=3, padding=1),
-            nn.Conv2d(32, 3, kernel_size=3, padding=1, bias=False)
-        )
-        
-        # Initialize weights
-        self._initialize_weights()
-    
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-
-    def _detect_backbone_dims(self, config):
-        """Auto-detect backbone output dimensions"""
-        # Create dummy input to get backbone dimensions
-        dummy_input = torch.randn(1, 3, config.DATASET.CROP_SIZE, config.DATASET.CROP_SIZE)
-        
-        with torch.no_grad():
-            features = self.backbone(dummy_input)
-            
-            # Get s8 feature dimensions
-            s8_features = features['s8']  # [1, C, H, W]
-            self.backbone_feature_dim = s8_features.shape[1]  # Channel dimension
-            self.spatial_h = s8_features.shape[2]  # Height
-            self.spatial_w = s8_features.shape[3]  # Width
-            
-            # Set projected feature dimension (can be different from backbone)
-            self.feature_dim = 512  # Target projection dimension
-            
-        print(f"Detected backbone dimensions:")
-        print(f"  - Backbone feature dim: {self.backbone_feature_dim}")
-        print(f"  - Spatial size: {self.spatial_h}x{self.spatial_w}")
-        print(f"  - Projected feature dim: {self.feature_dim}")
-    
-    def _build_memory_modules(self, config):
-        """Build memory modules with detected dimensions"""
-        
-        # Temporal memory config
+        # === 3. Dual Memory Modules ===
+        # Temporal memory config - SIMPLIFIED
         temp_config = type('TempConfig', (), {
             'FEATURE_DIM': self.feature_dim,
             'TEMPORAL_DIM': config.MODEL.MEMORY.TEMPORAL_DIM,
@@ -195,17 +133,38 @@ class DMIAD(nn.Module):
         
         self.temporal_memory = build_temporal_memory(temp_config)
         
-        # Spatial memory config (với spatial dimensions được detect)
+        # Spatial memory config - SIMPLIFIED
         if self.use_spatial_memory:
             spa_config = type('SpaConfig', (), {
                 'SPATIAL_DIM': config.MODEL.MEMORY.SPATIAL_DIM,
                 'SHRINK_THRES': config.MODEL.MEMORY.SHRINK_THRES,
-                'SPATIAL_H': self.spatial_h,
-                'SPATIAL_W': self.spatial_w,
+                'DATASET': config.DATASET  # Pass dataset config for spatial dimensions
             })()
             
             self.spatial_memory = build_spatial_memory(spa_config)
         
+        # === 4. Memory Fusion Module ===
+        if self.use_spatial_memory:
+            self.fusion = FusionModule(self.feature_dim, self.fusion_method)
+        
+        # === 5. Attention Modules ===
+        self.attn_s8 = ChannelAttention(self.feature_dim)
+        self.attn_s4 = ChannelAttention(256)
+        self.attn_s2 = ChannelAttention(128)
+        
+        # === 6. Decoder Network ===
+        self.up_s8_to_s4 = ConvTransposeBnRelu(self.feature_dim, 256, kernel_size=2, stride=2)
+        self.up_s4_to_s2 = ConvTransposeBnRelu(256, 128, kernel_size=2, stride=2)
+        self.up_s2_to_s1 = ConvTransposeBnRelu(128, 64, kernel_size=2, stride=2)
+        
+        # === 7. Final Output Layer ===
+        self.final_layer = nn.Sequential(
+            ConvBnRelu(64, 32, kernel_size=3, padding=1),
+            nn.Conv2d(32, 3, kernel_size=3, padding=1, bias=False)
+        )
+        
+        # Initialize weights
+        self._initialize_weights()
     
     def dual_memory_processing(self, features):
         """Process features through dual memory modules"""

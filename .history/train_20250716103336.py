@@ -17,7 +17,7 @@ from models.losses.combined_loss import CombinedLoss
 from utils.metrics import compute_metrics
 from utils.checkpoint import save_checkpoint, load_checkpoint
 from utils.logger import get_logger
-from utils.visualization import save_image_comparison  
+from utils.visualization import save_image_comparison  # Fixed import
 
 
 class Trainer:
@@ -291,7 +291,7 @@ class Trainer:
                         images[0], reconstructed[0], anomaly_scores['pixel_scores'][0],
                         save_path, masks[0], title=f'Epoch {epoch}'
                     )
-                    break  
+                    break  # Only save one sample
             
             self.model.train()
             

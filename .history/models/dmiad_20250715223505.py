@@ -151,16 +151,6 @@ class DMIAD(nn.Module):
         # Initialize weights
         self._initialize_weights()
     
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-
     def _detect_backbone_dims(self, config):
         """Auto-detect backbone output dimensions"""
         # Create dummy input to get backbone dimensions

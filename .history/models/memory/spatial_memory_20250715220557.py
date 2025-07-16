@@ -150,11 +150,15 @@ class SpatialMemoryModule(nn.Module):
 
 def build_spatial_memory(config):
     """Build spatial memory module"""
-    # Sử dụng spatial dimensions được detect từ backbone
+    # Calculate spatial dimensions from input size
+    # Assuming input after backbone is [B, C, H/8, W/8] due to stride 8
+    # For 288x288 input → 36x36 feature maps
+    spatial_size = config.DATASET.CROP_SIZE // 8  # 288 // 8 = 36
+    
     return SpatialMemoryModule(
         mem_dim=config.SPATIAL_DIM,
-        height=config.SPATIAL_H,
-        width=config.SPATIAL_W,
+        height=spatial_size,
+        width=spatial_size,
         shrink_thres=config.SHRINK_THRES
     )
 
