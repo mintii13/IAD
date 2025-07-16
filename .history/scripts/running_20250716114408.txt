@@ -1,0 +1,2 @@
+conda activate cras_env
+python mpdd_runner.py
