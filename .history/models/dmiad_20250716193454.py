@@ -1,6 +1,6 @@
 """
-DMIAD Main Model - FIXED VERSION
-Fixed size mismatch issues in MobileNet decoder
+DMIAD Main Model - Updated with MobileNet Support
+Supports both WideResNet and MobileNet backbones
 """
 
 import torch
@@ -188,10 +188,8 @@ class DMIAD(nn.Module):
         # Main projection for s8 features
         self.conv_proj = nn.Conv2d(self.backbone_feature_dim, self.feature_dim, kernel_size=1, bias=False)
         
-        # Skip connection projections for WideResNet (MobileNet handles this internally)
-        if not self.backbone_type.startswith('mobilenet'):
-            self.conv_s4 = nn.Conv2d(256, 256, kernel_size=1, bias=False)
-            self.conv_s2 = nn.Conv2d(128, 128, kernel_size=1, bias=False)
+        # Skip connection projections are handled by the backbone
+        # No need for separate projections since backbone already outputs standardized channels
     
     def _build_memory_modules(self, config):
         """Build memory modules with detected dimensions"""
@@ -222,11 +220,9 @@ class DMIAD(nn.Module):
         if self.backbone_type.startswith('mobilenet'):
             # Use lightweight MobileNet decoder
             self.decoder = MobileNetDecoder(input_dim=self.feature_dim)
-            self.use_mobilenet_decoder = True
         else:
             # Use original decoder for WideResNet
             self._build_original_decoder()
-            self.use_mobilenet_decoder = False
     
     def _build_original_decoder(self):
         """Build original decoder for WideResNet backbone"""
@@ -234,6 +230,10 @@ class DMIAD(nn.Module):
         self.attn_s8 = ChannelAttention(self.feature_dim)
         self.attn_s4 = ChannelAttention(256)
         self.attn_s2 = ChannelAttention(128)
+        
+        # Skip connection projections
+        self.conv_s4 = nn.Conv2d(256, 256, kernel_size=1, bias=False)
+        self.conv_s2 = nn.Conv2d(128, 128, kernel_size=1, bias=False)
         
         # Decoder layers
         self.up_s8_to_s4 = ConvTransposeBnRelu(self.feature_dim, 256, kernel_size=2, stride=2)
@@ -300,7 +300,7 @@ class DMIAD(nn.Module):
     def decode_features(self, memory_features, skip_features):
         """Decode features with appropriate decoder"""
         
-        if self.use_mobilenet_decoder:
+        if self.backbone_type.startswith('mobilenet'):
             # Use MobileNet decoder
             reconstructed = self.decoder(memory_features, skip_features)
         else:
@@ -400,26 +400,26 @@ def build_dmiad_model(config):
     return DMIAD(config)
 
 
-# Test function to verify the fix
-def test_dmiad_size_fix():
-    """Test DMIAD model with fixed size handling"""
+# Test function with MobileNet
+def test_dmiad_with_mobilenet():
+    """Test DMIAD model with MobileNet backbone"""
     from types import SimpleNamespace
     
-    print("Testing DMIAD with size fix...")
+    print("Testing DMIAD with MobileNet...")
     
     # Create config for MobileNet
     config = SimpleNamespace()
     config.MODEL = SimpleNamespace()
     config.MODEL.NAME = 'dmiad'
-    config.MODEL.BACKBONE = 'mobilenet_v2_0.5'
+    config.MODEL.BACKBONE = 'mobilenet_v2'  # Can be 'mobilenet_v2', 'mobilenet_v3', 'mobilenet_v2_0.5', etc.
     config.MODEL.PRETRAINED = False
     config.MODEL.PRETRAINED_PATH = None
     
     config.MODEL.MEMORY = SimpleNamespace()
     config.MODEL.MEMORY.USE_SPATIAL = True
     config.MODEL.MEMORY.FUSION_METHOD = 'add'
-    config.MODEL.MEMORY.TEMPORAL_DIM = 500
-    config.MODEL.MEMORY.SPATIAL_DIM = 500
+    config.MODEL.MEMORY.TEMPORAL_DIM = 1000  # Smaller for MobileNet
+    config.MODEL.MEMORY.SPATIAL_DIM = 1000
     config.MODEL.MEMORY.SHRINK_THRES = 0.0025
     
     config.DATASET = SimpleNamespace()
@@ -427,41 +427,105 @@ def test_dmiad_size_fix():
     
     # Build model
     model = build_dmiad_model(config)
-    print(f"✓ Model created successfully")
+    print(f"✓ MobileNet DMIAD model created")
+    print(f"✓ Model parameters: {sum(p.numel() for p in model.parameters()):,}")
     
-    # Test different input sizes to ensure compatibility
-    test_sizes = [(288, 288), (256, 256), (224, 224)]
+    # Test forward pass
+    dummy_input = torch.randn(2, 3, 288, 288)
     
-    for h, w in test_sizes:
-        print(f"\nTesting input size: {h}x{w}")
+    with torch.no_grad():
+        output = model(dummy_input)
+        print(f"✓ Input shape: {dummy_input.shape}")
+        print(f"✓ Reconstructed shape: {output['reconstructed'].shape}")
         
-        # Test forward pass
-        dummy_input = torch.randn(2, 3, h, w)
+        # Test anomaly scoring
+        scores = model.compute_anomaly_score(dummy_input, output['reconstructed'])
+        print(f"✓ Image scores shape: {scores['image_scores'].shape}")
+        print(f"✓ Pixel scores shape: {scores['pixel_scores'].shape}")
         
+        # Test memory items
+        memory_items = model.get_memory_items()
+        for name, item in memory_items.items():
+            print(f"✓ {name} shape: {item.shape}")
+    
+    print("✓ MobileNet DMIAD test completed successfully!")
+    
+    return model
+
+
+# Compare model sizes
+def compare_backbone_efficiency():
+    """Compare efficiency between WideResNet and MobileNet backbones"""
+    print("\n=== Backbone Efficiency Comparison ===")
+    
+    # Test both backbones
+    configs = {
+        'WideResNet': {
+            'backbone': 'wide_resnet',
+            'feature_dim': 512,
+            'memory_dim': 2000
+        },
+        'MobileNetV2': {
+            'backbone': 'mobilenet_v2', 
+            'feature_dim': 256,
+            'memory_dim': 1000
+        }
+    }
+    
+    for name, cfg in configs.items():
+        print(f"\n{name}:")
+        
+        # Create config
+        config = SimpleNamespace()
+        config.MODEL = SimpleNamespace()
+        config.MODEL.NAME = 'dmiad'
+        config.MODEL.BACKBONE = cfg['backbone']
+        config.MODEL.PRETRAINED = False
+        
+        config.MODEL.MEMORY = SimpleNamespace()
+        config.MODEL.MEMORY.USE_SPATIAL = True
+        config.MODEL.MEMORY.FUSION_METHOD = 'add'
+        config.MODEL.MEMORY.TEMPORAL_DIM = cfg['memory_dim']
+        config.MODEL.MEMORY.SPATIAL_DIM = cfg['memory_dim']
+        config.MODEL.MEMORY.SHRINK_THRES = 0.0025
+        
+        config.DATASET = SimpleNamespace()
+        config.DATASET.CROP_SIZE = 288
+        
+        # Build and test model
         try:
+            model = build_dmiad_model(config)
+            total_params = sum(p.numel() for p in model.parameters())
+            
+            # Test inference time
+            dummy_input = torch.randn(1, 3, 288, 288)
+            
+            import time
+            model.eval()
             with torch.no_grad():
-                output = model(dummy_input)
-                reconstructed = output['reconstructed']
+                # Warmup
+                for _ in range(10):
+                    _ = model(dummy_input)
                 
-                print(f"  Input: {dummy_input.shape}")
-                print(f"  Output: {reconstructed.shape}")
-                print(f"  Size match: {reconstructed.shape[-2:] == dummy_input.shape[-2:]}")
+                # Measure time
+                start_time = time.time()
+                for _ in range(100):
+                    _ = model(dummy_input)
+                end_time = time.time()
                 
-                # Test anomaly scoring
-                scores = model.compute_anomaly_score(dummy_input, reconstructed)
-                print(f"  Anomaly scores computed successfully")
-                
+                avg_time = (end_time - start_time) / 100 * 1000  # ms
+            
+            print(f"  Parameters: {total_params:,}")
+            print(f"  Inference time: {avg_time:.2f} ms")
+            print(f"  Memory dimension: {cfg['memory_dim']}")
+            
         except Exception as e:
-            print(f"  ✗ Error: {e}")
-            return False
-    
-    print("✓ All size tests passed!")
-    return True
+            print(f"  Error: {e}")
 
 
 if __name__ == "__main__":
-    success = test_dmiad_size_fix()
-    if success:
-        print("\n🎉 DMIAD model is ready for training with MobileNet!")
-    else:
-        print("\n❌ There are still issues to fix.")
+    # Test MobileNet DMIAD
+    model = test_dmiad_with_mobilenet()
+    
+    # Compare efficiency
+    compare_backbone_efficiency()

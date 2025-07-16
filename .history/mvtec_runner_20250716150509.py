@@ -19,32 +19,20 @@ config = {
     'gpu': 0,
     'seed': 0,
     'mode': 'train',  # 'train' or 'test'
-    
-    # Backbone options (just the names, keep your original config)
-    'backbone': 'wide_resnet',  # Default backbone
-    'available_backbones': [
-        'wide_resnet', 
-        'mobilenet_v2', 
-        'mobilenet_v2_0.5', 
-        'mobilenet_v2_0.75',
-        'mobilenet_v2_1.4', 
-        'mobilenet_v2_0.35',
-        'mobilenet_v3'
-    ],
-    
-    'mem_dim': 1000,  # Memory dimension (from your target_embed_dimension)
+    'backbone': 'wide_resnet',
+    'mem_dim': 1536,  # Memory dimension (from your target_embed_dimension)
     'epochs': 640,    # From your meta_epochs
-    'batch_size': 16,  # From your script
+    'batch_size': 6,  # From your script
     'lr': 1e-4,
     'setting': 'single',  # Single-class setting
     'resize': 329,        # From your script
     'imagesize': 288,     # From your script
     'use_spatial_memory': True,
     'fusion_method': 'add',
-    'output_dir': f'./results/mvtec_results_{timestamp}'
+    'output_dir': f'./results/mpdd_results_{timestamp}'
 }
 
-def run_dmiad_mvtec(mode='train', selected_classes=None, backbone=None):
+def run_dmiad_mvtec(mode='train', selected_classes=None):
     """Run DMIAD training/testing on MVTec dataset"""
     
     # Use selected classes or all classes
@@ -53,16 +41,11 @@ def run_dmiad_mvtec(mode='train', selected_classes=None, backbone=None):
     else:
         classes_to_run = config['classes']
     
-    # Use specified backbone or default
-    if backbone is None:
-        backbone = config['backbone']
-    
     print("DMIAD MVTec Configuration")
     print("=" * 60)
     print(f"Dataset path: {config['datapath']}")
     print(f"Classes ({len(classes_to_run)}): {classes_to_run}")
     print(f"Mode: {mode.upper()}")
-    print(f"Backbone: {backbone}")
     print(f"Setting: {config['setting']}")
     print(f"Epochs: {config['epochs']}")
     print(f"Batch size: {config['batch_size']}")
@@ -88,22 +71,27 @@ def run_dmiad_mvtec(mode='train', selected_classes=None, backbone=None):
             '--mode', config['mode'],
             '--gpu', str(config['gpu']),
             '--seed', str(config['seed']),
-            '--backbone', backbone,
+            '--backbone', config['backbone'],
             '--mem_dim', str(config['mem_dim']),
             '--batch_size', str(config['batch_size']),
             '--epochs', str(config['epochs']),
             '--lr', str(config['lr']),
             '--output_dir', config['output_dir'],
-            '--exp_name', f"dmiad_mvtec_{backbone}_{class_name}",
-            '--use_spatial_memory',
-            '--fusion_method', config['fusion_method']
+            '--exp_name', f"dmiad_mvtec_{class_name}"
         ]
+        
+        # Add spatial memory flag
+        if config['use_spatial_memory']:
+            cmd_args.append('--use_spatial_memory')
+        
+        # Add fusion method
+        cmd_args.extend(['--fusion_method', config['fusion_method']])
         
         # Add test-specific arguments
         if mode == 'test':
             cmd_args.extend([
                 '--save_images',
-                '--checkpoint', f"{config['output_dir']}/dmiad_mvtec_{backbone}_{class_name}/best_checkpoint.pth"
+                '--checkpoint', f"{config['output_dir']}/dmiad_mvtec_{class_name}/best_checkpoint.pth"
             ])
         
         print("Command:", ' '.join(cmd_args))
@@ -128,7 +116,6 @@ def run_dmiad_mvtec(mode='train', selected_classes=None, backbone=None):
     print("\n" + "=" * 60)
     print(f"MVTec {mode.upper()} SUMMARY")
     print("=" * 60)
-    print(f"Backbone: {backbone}")
     print(f"Total classes: {len(classes_to_run)}")
     print(f"Successful: {success_count}")
     print(f"Failed: {len(failed_classes)}")
@@ -138,24 +125,24 @@ def run_dmiad_mvtec(mode='train', selected_classes=None, backbone=None):
     
     return len(failed_classes) == 0
 
-def run_texture_classes(mode='train', backbone=None):
+def run_texture_classes(mode='train'):
     """Run only texture classes"""
     print("Running TEXTURE classes...")
-    return run_dmiad_mvtec(mode, config['texture_classes'], backbone)
+    return run_dmiad_mvtec(mode, config['texture_classes'])
 
-def run_object_classes(mode='train', backbone=None):
+def run_object_classes(mode='train'):
     """Run only object classes"""
     print("Running OBJECT classes...")
-    return run_dmiad_mvtec(mode, config['object_classes'], backbone)
+    return run_dmiad_mvtec(mode, config['object_classes'])
 
-def run_single_class(class_name, mode='train', backbone=None):
+def run_single_class(class_name, mode='train'):
     """Run single MVTec class"""
     if class_name not in config['classes']:
         print(f"Error: '{class_name}' is not a valid MVTec class")
         print(f"Available classes: {', '.join(config['classes'])}")
         return False
     
-    return run_dmiad_mvtec(mode, [class_name], backbone)
+    return run_dmiad_mvtec(mode, [class_name])
 
 def check_data_path():
     """Check if MVTec dataset path exists"""
@@ -196,15 +183,11 @@ if __name__ == "__main__":
         # Default: show options
         print("DMIAD MVTec Training/Testing Options:")
         print("=" * 50)
-        print("  python mvtec_runner.py train [backbone]                    # Train all 15 classes")
-        print("  python mvtec_runner.py test [backbone]                     # Test all 15 classes")
-        print("  python mvtec_runner.py texture [backbone] [mode]           # Train/test 5 texture classes")
-        print("  python mvtec_runner.py object [backbone] [mode]            # Train/test 10 object classes")
-        print("  python mvtec_runner.py single <class> [backbone] [mode]    # Train/test single class")
-        print()
-        print("Available backbones:")
-        print("  ", ', '.join(config['available_backbones']))
-        print(f"  Default: {config['backbone']}")
+        print("  python mvtec_runner.py train                    # Train all 15 classes")
+        print("  python mvtec_runner.py test                     # Test all 15 classes")
+        print("  python mvtec_runner.py texture [mode]           # Train/test 5 texture classes")
+        print("  python mvtec_runner.py object [mode]            # Train/test 10 object classes")
+        print("  python mvtec_runner.py single <class> [mode]    # Train/test single class")
         print()
         print("Available MVTec classes:")
         print("  Texture (5):", ', '.join(config['texture_classes']))
@@ -212,52 +195,32 @@ if __name__ == "__main__":
         print()
         print("Examples:")
         print("  python mvtec_runner.py train")
-        print("  python mvtec_runner.py train mobilenet_v2")
-        print("  python mvtec_runner.py texture mobilenet_v2_0.5 test")
+        print("  python mvtec_runner.py texture test")
         print("  python mvtec_runner.py single carpet")
-        print("  python mvtec_runner.py single bottle mobilenet_v2 test")
+        print("  python mvtec_runner.py single bottle test")
         sys.exit(0)
-    
-    # Parse arguments
-    command = sys.argv[1]
-    
-    # Extract backbone and mode from arguments
-    backbone = None
-    mode = 'train'
-    
-    if command == 'train':
-        if len(sys.argv) > 2 and sys.argv[2] in config['available_backbones']:
-            backbone = sys.argv[2]
-        success = run_dmiad_mvtec('train', backbone=backbone)
         
-    elif command == 'test':
-        if len(sys.argv) > 2 and sys.argv[2] in config['available_backbones']:
-            backbone = sys.argv[2]
-        success = run_dmiad_mvtec('test', backbone=backbone)
+    elif sys.argv[1] == 'train':
+        success = run_dmiad_mvtec('train')
         
-    elif command == 'texture':
-        # Parse backbone and mode for texture
-        if len(sys.argv) > 2 and sys.argv[2] in config['available_backbones']:
-            backbone = sys.argv[2]
-            if len(sys.argv) > 3 and sys.argv[3] in ['train', 'test']:
-                mode = sys.argv[3]
-        elif len(sys.argv) > 2 and sys.argv[2] in ['train', 'test']:
-            mode = sys.argv[2]
+    elif sys.argv[1] == 'test':
+        success = run_dmiad_mvtec('test')
         
-        success = run_texture_classes(mode, backbone)
+    elif sys.argv[1] == 'texture':
+        mode = sys.argv[2] if len(sys.argv) > 2 else 'train'
+        if mode not in ['train', 'test']:
+            print("Error: Mode must be 'train' or 'test'")
+            sys.exit(1)
+        success = run_texture_classes(mode)
         
-    elif command == 'object':
-        # Parse backbone and mode for object
-        if len(sys.argv) > 2 and sys.argv[2] in config['available_backbones']:
-            backbone = sys.argv[2]
-            if len(sys.argv) > 3 and sys.argv[3] in ['train', 'test']:
-                mode = sys.argv[3]
-        elif len(sys.argv) > 2 and sys.argv[2] in ['train', 'test']:
-            mode = sys.argv[2]
+    elif sys.argv[1] == 'object':
+        mode = sys.argv[2] if len(sys.argv) > 2 else 'train'
+        if mode not in ['train', 'test']:
+            print("Error: Mode must be 'train' or 'test'")
+            sys.exit(1)
+        success = run_object_classes(mode)
         
-        success = run_object_classes(mode, backbone)
-        
-    elif command == 'single':
+    elif sys.argv[1] == 'single':
         if len(sys.argv) < 3:
             print("Error: Please specify class name for single mode")
             print("Example: python mvtec_runner.py single carpet")
@@ -265,19 +228,16 @@ if __name__ == "__main__":
             sys.exit(1)
         
         class_name = sys.argv[2]
+        mode = sys.argv[3] if len(sys.argv) > 3 else 'train'
         
-        # Parse backbone and mode for single
-        if len(sys.argv) > 3 and sys.argv[3] in config['available_backbones']:
-            backbone = sys.argv[3]
-            if len(sys.argv) > 4 and sys.argv[4] in ['train', 'test']:
-                mode = sys.argv[4]
-        elif len(sys.argv) > 3 and sys.argv[3] in ['train', 'test']:
-            mode = sys.argv[3]
-        
-        success = run_single_class(class_name, mode, backbone)
+        if mode not in ['train', 'test']:
+            print("Error: Mode must be 'train' or 'test'")
+            sys.exit(1)
+            
+        success = run_single_class(class_name, mode)
         
     else:
-        print("Invalid option. Use: train, test, texture, object, or single <class_name>")
+        print("Invalid option. Use: train, test, texture, object, or single <class_name> [train/test]")
         sys.exit(1)
     
     if not success:

@@ -1,0 +1,3 @@
+conda activate cras_env
+python mpdd_runner.py
+python mvtec_runner.py
